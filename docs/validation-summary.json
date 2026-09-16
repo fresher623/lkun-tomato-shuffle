@@ -1,0 +1,42 @@
+{
+  "date": "2026-09-12",
+  "apk": "TomatoShuffle-0.1.0-debug.apk",
+  "bytes": 60467481,
+  "sha256": "5ba6f6ff8b69206850c9c873aafccd40d107314d176056ffe3a2793c5a2bc51c",
+  "tests": [
+    {
+      "name": "com.fanqie.hunxiao.core.GilbertShuffleTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "time": "0.143",
+      "timestamp": "2026-09-12T07:45:56"
+    },
+    {
+      "name": "com.fanqie.hunxiao.AppTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "time": "11.221",
+      "timestamp": "2026-09-12T08:00:30"
+    }
+  ],
+  "lint": [
+    {
+      "id": "ObsoleteSdkInt",
+      "severity": "Warning",
+      "message": "This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 29. Merge all the resources in this folder into `mipmap-anydpi`."
+    },
+    {
+      "id": "MonochromeLauncherIcon",
+      "severity": "Warning",
+      "message": "The application adaptive icon is missing a monochrome tag"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning",
+      "message": "Use the KTX function `createBitmap` instead?"
+    }
+  ],
+  "deviceTests": "Compiled only. No device connected."
+}

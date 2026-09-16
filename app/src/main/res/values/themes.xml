@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.Tomato" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#D74C35</item>
+        <item name="android:windowBackground">#FAF8F4</item>
+    </style>
+</resources>

@@ -1,0 +1,72 @@
+{
+  "capturedAt": "2026-09-12",
+  "url": "https://xiaofanqiehunxiao.com/",
+  "scriptSha256": "ce6c113441c9c87a43bd6324ff497908187d333402d3cc9f389be62525ee492e",
+  "cases": [
+    [
+      1,
+      1
+    ],
+    [
+      1,
+      13
+    ],
+    [
+      17,
+      1
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      3,
+      2
+    ],
+    [
+      3,
+      3
+    ],
+    [
+      4,
+      5
+    ],
+    [
+      5,
+      4
+    ],
+    [
+      7,
+      11
+    ],
+    [
+      11,
+      7
+    ],
+    [
+      16,
+      16
+    ],
+    [
+      31,
+      17
+    ],
+    [
+      17,
+      31
+    ],
+    [
+      64,
+      48
+    ],
+    [
+      48,
+      64
+    ],
+    [
+      127,
+      83
+    ]
+  ],
+  "scope": "Website curve functions and pixel shift before JPEG encoding. Browser/Android codecs excluded."
+}
