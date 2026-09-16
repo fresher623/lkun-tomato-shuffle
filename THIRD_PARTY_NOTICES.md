@@ -1,3 +1,36 @@
+# 第三方组件与许可说明
+
+## 本项目的许可
+
+l君の番茄混淆（本仓库的原创代码、界面与文档）采用 **GNU General Public License v3.0**
+发布，完整文本见仓库根目录的 `LICENSE`。
+
+## 与第三方许可的关系
+
+本项目包含改编自 Gilbert 项目的曲线遍历代码，该项目采用 **BSD 2-Clause** 许可。
+BSD 2-Clause 是宽松许可，**与 GPL-3.0 兼容**：它可以被吸收进 GPL-3.0 项目中，
+条件是保留其版权声明与许可条文。该声明完整保留在本文件下方，并随应用一起分发
+（见 `app/src/main/assets/THIRD_PARTY_NOTICES.txt`，应用内「帮助与设置 → 开源许可」可查看）。
+
+因此，本仓库整体按 GPL-3.0 分发；其中 Gilbert 部分仍同时受其原始 BSD 2-Clause 条款保护，
+两者不冲突。
+
+## 参考网站的说明
+
+本项目曾以参考网站 `xiaofanqiehunxiao.com` 的**可观测像素置换规则**作为对照基准，
+用于验证算法互通性（对照来源与方法见 `docs/reference-capture.json` 与 `docs/VERIFICATION.md`）。
+
+需要明确：
+
+- 本项目与该网站**没有隶属、授权或合作关系**，不是该网站的官方客户端。
+- 项目中**不包含**该网站的任何界面代码、脚本或资源；网站源码快照只保留在本地忽略目录
+  `.research`，不进入本仓库、也不打包进应用。
+- 双方每次操作后对 JPEG 的重新编码方式不同，因此**像素置换规则互通不代表文件逐字节一致**。
+
+---
+
+## 随附的第三方许可文本
+
 Gilbert traversal: adapted from https://github.com/jakubcerveny/gilbert
 
 BSD 2-Clause License

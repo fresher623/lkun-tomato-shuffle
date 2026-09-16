@@ -13,13 +13,15 @@ object GilbertShuffle {
     enum class Direction { MIX, RESTORE }
 
     fun transform(
-        input: IntArray, width: Int, height: Int, direction: Direction,
+        input: IntArray, width: Int, height: Int, direction: Direction, rounds: Int = 1,
         checkpoint: (Float) -> Unit = {}
     ): IntArray {
         require(width > 0 && height > 0 && width.toLong() * height == input.size.toLong())
+        require(rounds in 1..100) { "次数必须为 1～100 的整数。" }
         val path = traversal(width, height) { checkpoint(it * 0.5f) }
         val output = IntArray(input.size)
-        val shift = ((sqrt(5.0) - 1.0) / 2.0 * input.size).roundToInt()
+        val singleShift = ((sqrt(5.0) - 1.0) / 2.0 * input.size).roundToInt()
+        val shift = (singleShift.toLong() * rounds % input.size).toInt()
         for (i in path.indices) {
             if (i % 8192 == 0) checkpoint(0.5f + i.toFloat() / input.size * 0.5f)
             val a = path[i]

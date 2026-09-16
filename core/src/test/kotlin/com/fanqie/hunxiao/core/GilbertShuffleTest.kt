@@ -46,6 +46,27 @@ class GilbertShuffleTest {
         }
     }
 
+    @Test fun combinedRoundsMatchIndependentRepeatedOperations() {
+        for ((w,h) in listOf(1 to 1, 1 to 11, 13 to 1, 7 to 13, 16 to 12, 128 to 97)) {
+            val input = IntArray(w*h) { Random(it).nextInt() }
+            for (n in listOf(1,2,3,5,10,100)) for (direction in GilbertShuffle.Direction.entries) {
+                var expected = input
+                repeat(n) { expected = GilbertShuffle.transform(expected,w,h,direction) }
+                val actual = GilbertShuffle.transform(input,w,h,direction,n)
+                assertArrayEquals("$w x $h / $n / $direction",expected,actual)
+                val inverse = if (direction == GilbertShuffle.Direction.MIX) GilbertShuffle.Direction.RESTORE else GilbertShuffle.Direction.MIX
+                assertArrayEquals(input,GilbertShuffle.transform(actual,w,h,inverse,n))
+            }
+        }
+    }
+    @Test fun invalidRoundsAreRejected() {
+        for (n in listOf(Int.MIN_VALUE,-1,0,101,Int.MAX_VALUE)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                GilbertShuffle.transform(intArrayOf(1),1,1,GilbertShuffle.Direction.MIX,n)
+            }
+        }
+    }
+
     @Test fun invalidDimensionsFailBeforeAllocation() {
         assertThrows(IllegalArgumentException::class.java) { GilbertShuffle.traversal(0,3) }
         assertThrows(IllegalArgumentException::class.java) { GilbertShuffle.traversal(Int.MAX_VALUE,2) }

@@ -1,1 +1,6 @@
-<resources><string name="app_name">番茄混淆</string></resources>
+<resources>
+    <string name="app_name">l君の番茄混淆</string>
+    <string name="batch_notification_title">正在处理图片</string>
+    <string name="batch_channel_name">批量处理进度</string>
+    <string name="batch_channel_description">批量混淆或解混淆进行时显示进度，任务结束后自动消失。</string>
+</resources>

@@ -1,7 +1,10 @@
 package com.fanqie.hunxiao
 
+import android.Manifest
 import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -46,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,6 +68,9 @@ private val Line = Color(0xFFE9E6DE)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A killed process is meant to come back to a clean slate: drop the previous journal and any
+        // staged results before the UI can show them. Rotation and backgrounding do not come here.
+        BatchHost.resetStaleFiles(this)
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = Tomato, onPrimary = Color.White,
@@ -82,13 +89,37 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun TomatoApp(model: EditorViewModel = viewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
+    val batch by model.batch.state.collectAsStateWithLifecycle()
+    val idle = state.busy == null && !batch.busy
+    var batchMode by rememberSaveable { mutableStateOf(false) }
+    var repeatPanel by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     var settings by rememberSaveable { mutableStateOf(false) }
     var fullscreen by remember { mutableStateOf(false) }
+    var notificationGranted by rememberSaveable { mutableStateOf(false) }
+    var pendingBatch by remember { mutableStateOf<(() -> Unit)?>(null) }
     val snack = remember { SnackbarHostState() }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(model::load) }
     val choose = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    // The foreground service needs the notification permission on Android 13+ to show progress.
+    // Asking before the batch starts keeps processing in the foreground while the dialog is up.
+    // Denying it is allowed: the service still runs, the progress notification is just invisible.
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationGranted = true
+        pendingBatch?.invoke()
+        pendingBatch = null
+    }
+    val gate: ((() -> Unit)) -> Unit = { action ->
+        if (notificationGranted || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            notificationGranted = true
+            action()
+        } else {
+            pendingBatch = action
+            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     LaunchedEffect(model, owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             model.events.collect { event ->
@@ -99,7 +130,7 @@ private fun TomatoApp(model: EditorViewModel = viewModel()) {
                             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                                 type = event.mime
                                 putExtra(Intent.EXTRA_STREAM, event.uri)
-                                clipData = ClipData.newRawUri("番茄混淆图片", event.uri)
+                                clipData = ClipData.newRawUri("l君の番茄混淆图片", event.uri)
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }, "分享图片 · 建议发送原文件"))
                         } catch (_: Exception) { snack.showSnackbar("未找到可用的分享应用，请先保存到相册。") }
@@ -116,11 +147,18 @@ private fun TomatoApp(model: EditorViewModel = viewModel()) {
                 Image(painterResource(R.drawable.tomato_mark), "番茄标志", Modifier.size(42.dp)
                     .background(Color(0xFFF5EBDD), RoundedCornerShape(14.dp)))
                 Spacer(Modifier.width(10.dp))
-                Text("番茄混淆", fontWeight = FontWeight.Bold, fontSize = 21.sp, modifier = Modifier.weight(1f))
-                IconButton(onClick = { settings = true }, enabled = state.busy == null) {
+                Text("l君の番茄混淆", fontWeight = FontWeight.Bold, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                IconButton(onClick = { settings = true }, enabled = idle) {
                     Icon(Icons.Outlined.Tune, "帮助与设置", tint = Muted)
                 }
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FilterChip(selected = !batchMode, onClick = { batchMode = false }, enabled = idle, label = { Text("单张处理") })
+                FilterChip(selected = batchMode, onClick = { batchMode = true }, enabled = idle, label = { Text("批量处理") })
+            }
+            if (batchMode) {
+                BatchPanel(batch, model, state, idle, gate) { settings = true }
+            } else {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 if (state.image == null) {
                     Text("给图片换个样子。", fontSize = 29.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, color = Ink)
@@ -140,40 +178,42 @@ private fun TomatoApp(model: EditorViewModel = viewModel()) {
                     }
                     if (state.image == null) {
                         Column(Modifier.fillMaxWidth().height(285.dp).clip(RoundedCornerShape(18.dp))
-                            .background(Color(0xFFF8F6F1)).clickable(enabled = state.busy == null, onClick = choose),
+                            .background(Color(0xFFF8F6F1)).clickable(enabled = idle, onClick = choose),
                             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             PictureArtwork()
                             Spacer(Modifier.height(20.dp))
                             Text("从一张图片开始", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                             Text("支持 JPG、PNG · 保留原文件", Modifier.padding(top = 7.dp), fontSize = 12.sp, color = Muted)
                         }
-                        Button(onClick = choose, enabled = state.busy == null, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(15.dp)) {
+                        Button(onClick = choose, enabled = idle, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(15.dp)) {
                             Icon(Icons.Outlined.AddPhotoAlternate, null, Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp)); Text("选择图片", fontSize = 16.sp)
                         }
                     } else {
                         Box(Modifier.fillMaxWidth().height(310.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xFFF2F1ED))
-                            .clickable(enabled = state.busy == null) { fullscreen = true }) {
+                            .clickable(enabled = idle) { fullscreen = true }) {
                             Image(state.image!!.asImageBitmap(), "当前图片预览，点击放大", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                             Icon(Icons.Outlined.OpenInFull, null, Modifier.align(Alignment.BottomEnd).padding(12.dp)
                                 .background(Color.White.copy(alpha = .9f), CircleShape).padding(8.dp).size(16.dp), tint = Ink)
                         }
                         Text("本次操作：混淆 ${state.mixCount} 次 · 解混淆 ${state.restoreCount} 次", color = Muted, fontSize = 12.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(onClick = { model.transform(GilbertShuffle.Direction.MIX) }, enabled = state.busy == null,
+                            Button(onClick = { model.transform(GilbertShuffle.Direction.MIX) }, enabled = idle,
                                 modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(14.dp)) {
                                 Icon(Icons.Outlined.Shuffle, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("混淆")
                             }
-                            FilledTonalButton(onClick = { model.transform(GilbertShuffle.Direction.RESTORE) }, enabled = state.busy == null,
+                            FilledTonalButton(onClick = { model.transform(GilbertShuffle.Direction.RESTORE) }, enabled = idle,
                                 modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFFE9EEE5), contentColor = Green)) {
                                 Icon(Icons.Outlined.Restore, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("解混淆")
                             }
                         }
+                        OutlinedButton(onClick = { repeatPanel = true }, enabled = idle, modifier = Modifier.fillMaxWidth()) { Text("指定次数…") }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = choose, enabled = state.busy == null) { Text("换一张图片") }
-                            TextButton(onClick = model::reset, enabled = state.busy == null && state.mixCount + state.restoreCount > 0) { Text("重置到导入状态") }
+                            TextButton(onClick = choose, enabled = idle) { Text("换一张图片") }
+                            TextButton(onClick = model::reset, enabled = idle && state.mixCount + state.restoreCount > 0) { Text("重置到导入状态") }
                         }
+                        TextButton(onClick = model::clearImage, enabled = idle, modifier = Modifier.fillMaxWidth()) { Text("清除当前图片") }
                     }
                 }
             }
@@ -194,16 +234,16 @@ private fun TomatoApp(model: EditorViewModel = viewModel()) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("导出图片", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { settings = true }, enabled = state.busy == null) {
+                        TextButton(onClick = { settings = true }, enabled = idle) {
                             Text(if (state.format == ExportFormat.PNG) "PNG · 无损保存" else "JPEG · 质量 ${state.quality}", fontSize = 12.sp)
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(onClick = { model.export(false) }, enabled = state.busy == null,
+                        OutlinedButton(onClick = { model.export(false) }, enabled = idle,
                             modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(14.dp)) {
                             Icon(Icons.Outlined.FileDownload, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("保存到相册")
                         }
-                        OutlinedButton(onClick = { model.export(true) }, enabled = state.busy == null,
+                        OutlinedButton(onClick = { model.export(true) }, enabled = idle,
                             modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(14.dp)) {
                             Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("分享")
                         }
@@ -219,6 +259,7 @@ private fun TomatoApp(model: EditorViewModel = viewModel()) {
                     Step("03", "保存与分享", "建议发送原文件")
                 }
             }
+            }
             HorizontalDivider(color = Line)
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Outlined.Info, null, Modifier.size(16.dp), tint = Muted)
@@ -228,6 +269,7 @@ private fun TomatoApp(model: EditorViewModel = viewModel()) {
                 textAlign = TextAlign.Center, fontSize = 11.sp, color = Muted)
         }
     }
+    if (repeatPanel) RepeatDialog({ direction, rounds -> model.transform(direction, rounds); repeatPanel = false }) { repeatPanel = false }
     if (settings) SettingsDialog(state, model) { settings = false }
     state.error?.let { error ->
         AlertDialog(onDismissRequest = model::clearError, title = { Text("暂时未能完成") },
@@ -311,10 +353,10 @@ private fun TomatoApp(model: EditorViewModel = viewModel()) {
             Text("使用说明", fontWeight = FontWeight.Bold)
             Text("混淆几次，就需反向操作几次。外部图片的历史次数未知，App 仅记录本次操作。重置会回到本次导入时的画面。", lineHeight = 21.sp)
             Text("解混淆需要保留图片尺寸。请发送原文件；裁剪、缩放、截图和有损压缩可能破坏结果。", lineHeight = 21.sp)
-            Text("本版本统一为 sRGB，透明背景合成黑色。图片仅保留在本次会话中；退出后需重新导入。", lineHeight = 21.sp)
+            Text("本版本统一为 sRGB，透明背景合成黑色。单图预览仅保留在本次会话中；批量会保留任务引用和保存状态，清空列表不删除相册图片。批量处理只在本机计算，勾选后才会写入相册；未保存的处理结果在应用退出后需要重新处理。", lineHeight = 21.sp)
             Text("隐私说明", fontWeight = FontWeight.Bold)
-            Text("无账号、无广告、无联网权限。只读取你选择的图片，原文件不被覆盖。分享时由你选择的应用接收图片；临时分享文件会在后续分享时清理超过 24 小时的缓存。", lineHeight = 21.sp)
-            Text("番茄混淆 0.1.0 · 内测版", color = Muted, fontSize = 12.sp)
+            Text("无账号、无广告、未声明联网权限，应用无法联网，图片不会离开本机。只读取你选择的图片，原文件不被覆盖。批量处理时会显示进度通知，拒绝通知权限也能正常处理。分享时由你选择的应用接收图片；临时分享文件会在后续分享时清理超过 24 小时的缓存。", lineHeight = 21.sp)
+            Text("l君の番茄混淆 ${BuildConfig.VERSION_NAME} · 内测版", color = Muted, fontSize = 12.sp)
             TextButton(onClick = { showLicense = true }) { Text("开源许可") }
         }
     }, confirmButton = { TextButton(onClick = close) { Text("完成") } })

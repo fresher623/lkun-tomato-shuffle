@@ -15,17 +15,21 @@ if ($projectPath -match '[^\x00-\x7F]') {
 }
 if ($JavaPath) { $env:JAVA_HOME = $JavaPath }
 if (-not $env:JAVA_HOME) {
-    $candidates = @('C:\Program Files\Android\Android Studio\jbr', 'D:\IntelliJ IDEA 2024.3.5\jbr')
-    foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath "$candidate\bin\java.exe") { $env:JAVA_HOME = $candidate; break }
+    if (Get-Command java -ErrorAction SilentlyContinue) {
+        $javaSettings = & java -XshowSettings:properties -version 2>&1 | Out-String
+        if ($javaSettings -match 'java.home\s*=\s*([^\r\n]+)') { $env:JAVA_HOME = $Matches[1].Trim() }
     }
+}
+if (-not $env:JAVA_HOME -or -not (Test-Path -LiteralPath "$env:JAVA_HOME/bin/jlink.exe")) {
+    throw 'A full JDK 21 (including jlink) is required. Set JAVA_HOME or pass -JavaPath.'
 }
 if (-not $SdkPath) {
     if ($env:ANDROID_HOME) { $SdkPath = $env:ANDROID_HOME }
-    elseif (Test-Path -LiteralPath "$buildPath\.tools\android-sdk") { $SdkPath = "$buildPath\.tools\android-sdk" }
-    else { $SdkPath = "$env:LOCALAPPDATA\Android\Sdk" }
+    elseif ($env:ANDROID_SDK_ROOT) { $SdkPath = $env:ANDROID_SDK_ROOT }
+    elseif (Test-Path -LiteralPath "$buildPath/.tools/android-sdk") { $SdkPath = "$buildPath/.tools/android-sdk" }
+    else { $SdkPath = "$env:LOCALAPPDATA/Android/Sdk" }
 }
-if (-not (Test-Path -LiteralPath "$SdkPath\platforms\android-35\android.jar")) {
+if (-not (Test-Path -LiteralPath "$SdkPath/platforms/android-35/android.jar")) {
     throw 'Please install Android SDK platform 35 and build-tools 35.0.0, then pass -SdkPath.'
 }
 $sdkProperty = $SdkPath.Replace('\', '/')
@@ -33,10 +37,11 @@ $escaped = -join ($sdkProperty.ToCharArray() | ForEach-Object {
     if ([int]$_ -gt 127) { '\u{0:x4}' -f [int]$_ } else { [string]$_ }
 })
 Set-Content -LiteralPath 'local.properties' -Value "sdk.dir=$escaped" -Encoding ascii
-$gradleCommand = "$buildPath\.tools\gradle-8.11.1\bin\gradle.bat"
-if (-not (Test-Path -LiteralPath $gradleCommand)) { $gradleCommand = "$buildPath\gradlew.bat" }
-& $gradleCommand -p $buildPath :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest --console plain
+& "$buildPath/gradlew.bat" -p $buildPath :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest --console plain
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$metadata = Get-Content -LiteralPath 'app/build/outputs/apk/debug/output-metadata.json' -Raw | ConvertFrom-Json
+$version = $metadata.elements[0].versionName
 New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
-Copy-Item -LiteralPath 'app\build\outputs\apk\debug\app-debug.apk' -Destination 'dist\TomatoShuffle-0.1.0-debug.apk'
-Get-FileHash -LiteralPath 'dist\TomatoShuffle-0.1.0-debug.apk' -Algorithm SHA256
+$artifact = "dist/LjunTomatoShuffle-$version-debug.apk"
+Copy-Item -LiteralPath 'app/build/outputs/apk/debug/app-debug.apk' -Destination $artifact
+Get-FileHash -LiteralPath $artifact -Algorithm SHA256
